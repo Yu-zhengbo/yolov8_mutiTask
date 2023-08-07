@@ -208,12 +208,17 @@ class EvalCallback():
                         obj_name = self.class_names[tag][obj]
                         new_f.write("%s %s %s %s %s\n" % (obj_name, left, top, right, bottom))
 
+            map_return = {}
+
             for i in range(len(self.task_name)):
                 print("Calculate Map.")
                 try:
                     temp_map = get_coco_map(class_names=self.class_names[i], path=os.path.join(self.map_out_path,str(i)))[1]
                 except:
                     temp_map = get_map(self.MINOVERLAP, False, path=os.path.join(self.map_out_path,str(i)))
+
+                map_return[self.task_name[i]] = temp_map
+
                 self.maps[i].append(temp_map)
                 self.epoches[i].append(epoch)
 
@@ -236,3 +241,5 @@ class EvalCallback():
 
             print("Get map done.")
             shutil.rmtree(self.map_out_path)
+
+        return map_return

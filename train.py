@@ -19,6 +19,8 @@ from utils.callbacks import EvalCallback, LossHistory
 from utils.dataloader import YoloDataset, yolo_dataset_collate,yolo_dataset_collate_val
 from utils.utils import download_weights, get_classes, show_config
 from utils.utils_fit import fit_one_epoch
+import wandb
+from utils.visualize import visual_gt_pred
 
 '''
 训练自己的目标检测模型一定需要注意以下几点：
@@ -37,6 +39,9 @@ from utils.utils_fit import fit_one_epoch
    如果只是训练了几个Step是不会保存的，Epoch和Step的概念要捋清楚一下。
 '''
 if __name__ == "__main__":
+
+    wandb.init(project="yolo8_mutitask")
+
 
     Task = 2  #决定了检测头的数量
 
@@ -94,8 +99,11 @@ if __name__ == "__main__":
     #      可以设置mosaic=True，直接随机初始化参数开始训练，但得到的效果仍然不如有预训练的情况。（像COCO这样的大数据集可以这样做）
     #   2、了解imagenet数据集，首先训练分类模型，获得网络的主干部分权值，分类模型的 主干部分 和该模型通用，基于此进行训练。
     #----------------------------------------------------------------------------------------------------------------------------#
-    model_path      = 'model_data/yolov8_s.pth'
-    # model_path  = 'logs/best_epoch_weights__.pth'
+    # model_path      = 'model_data/yolov8_s.pth'
+    # model_path  = 'logs/best_epoch_weights_fir.pth'
+    # model_path_2 = 'logs/best_epoch_weights_sec.pth'
+    # model_path      = 'logs/best_epoch_weights_epoch_20.pth'
+    model_path = 'logs/ep050-loss5.882-val_loss6.248.pth'
     #------------------------------------------------------#
     #   input_shape     输入的shape大小，一定要是32的倍数
     #------------------------------------------------------#
@@ -174,7 +182,7 @@ if __name__ == "__main__":
     #                       (当Freeze_Train=False时失效)
     #------------------------------------------------------------------#
     Init_Epoch          = 0
-    Freeze_Epoch        = 50
+    Freeze_Epoch        = 20
     Freeze_batch_size   = 16
     #------------------------------------------------------------------#
     #   解冻阶段训练参数
@@ -185,8 +193,8 @@ if __name__ == "__main__":
     #                           Adam可以使用相对较小的UnFreeze_Epoch
     #   Unfreeze_batch_size     模型在解冻后的batch_size
     #------------------------------------------------------------------#
-    UnFreeze_Epoch      = 300
-    Unfreeze_batch_size = 16
+    UnFreeze_Epoch      = 50
+    Unfreeze_batch_size = 8
     #------------------------------------------------------------------#
     #   Freeze_Train    是否进行冻结训练
     #                   默认先冻结主干训练后解冻训练。
@@ -210,7 +218,7 @@ if __name__ == "__main__":
     #   weight_decay    权值衰减，可防止过拟合
     #                   adam会导致weight_decay错误，使用adam时建议设置为0。
     #------------------------------------------------------------------#
-    optimizer_type      = "sgd"
+    optimizer_type      = "adam"
     momentum            = 0.937
     weight_decay        = 5e-4
     #------------------------------------------------------------------#
@@ -235,7 +243,7 @@ if __name__ == "__main__":
     #   （二）此处设置评估参数较为保守，目的是加快评估速度。
     #------------------------------------------------------------------#
     eval_flag           = True
-    eval_period         = 2
+    eval_period         = 1
     #------------------------------------------------------------------#
     #   num_workers     用于设置是否使用多线程读取数据
     #                   开启后会加快数据读取速度，但是会占用更多内存
@@ -300,7 +308,9 @@ if __name__ == "__main__":
         #------------------------------------------------------#
         model_dict      = model.state_dict()
         pretrained_dict = torch.load(model_path, map_location = device)
+        # pretrained_dict_1 = torch.load(model_path_2,map_location=device)
         load_key, no_load_key, temp_dict = [], [], {}
+
         for k, v in pretrained_dict.items():
             ks = []
             for i in range(Task):
@@ -316,6 +326,18 @@ if __name__ == "__main__":
                         temp_dict[ks[i]] = v
                         load_key.append(ks[i])
                 no_load_key.append(k)
+
+        # for k,v in model_dict.items():
+        #     if k in pretrained_dict.keys() and np.shape(pretrained_dict[k]) == np.shape(v):
+        #          temp_dict[k] = v
+        #          load_key.append(k)
+        #     elif k in pretrained_dict_1.keys() and np.shape(pretrained_dict_1[k]) == np.shape(v):
+        #         temp_dict[k] = v
+        #         load_key.append(k)
+        #     else:
+        #         no_load_key.append(k)
+
+
         model_dict.update(temp_dict)
         model.load_state_dict(model_dict)
         #------------------------------------------------------#
@@ -379,11 +401,17 @@ if __name__ == "__main__":
     #---------------------------#
     #   读取数据集对应的txt
     #---------------------------#
+
+    visual_list = []
+
     train_lines = []
     for train_annotation_path_temp in train_annotation_path:
         with open(train_annotation_path_temp, encoding='utf-8') as f:
             train_lines_temp = f.readlines()
             train_lines.extend(train_lines_temp)
+
+            visual_list.append(train_lines_temp[0])
+
 
     val_lines = []
     for val_annotation_path_temp in val_annotation_path:
@@ -557,7 +585,7 @@ if __name__ == "__main__":
                 gen             = DataLoader(train_dataset, shuffle = shuffle, batch_size = batch_size, num_workers = num_workers, pin_memory=True,
                                             drop_last=True, collate_fn=yolo_dataset_collate, sampler=train_sampler)
                 gen_val         = DataLoader(val_dataset  , shuffle = shuffle, batch_size = batch_size, num_workers = num_workers, pin_memory=True, 
-                                            drop_last=True, collate_fn=yolo_dataset_collate_val, sampler=val_sampler)
+                                            drop_last=True, collate_fn=yolo_dataset_collate, sampler=val_sampler)
 
                 UnFreeze_flag   = True
 
@@ -570,9 +598,14 @@ if __name__ == "__main__":
             set_optimizer_lr(optimizer, lr_scheduler_func, epoch)
 
             fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, eval_callback, optimizer, epoch, epoch_step, epoch_step_val, gen, gen_val, UnFreeze_Epoch, Cuda, fp16, scaler, save_period, save_dir, local_rank)
-            
+
+            visual_gt_pred(model_train, class_names, num_classes,visual_list)
+
+
             if distributed:
                 dist.barrier()
 
         if local_rank == 0:
             loss_history.writer.close()
+
+        wandb.finish()

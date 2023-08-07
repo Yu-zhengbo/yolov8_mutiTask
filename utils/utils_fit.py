@@ -2,7 +2,7 @@ import os
 
 import torch
 from tqdm import tqdm
-
+import wandb
 from utils.utils import get_lr
         
 def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, eval_callback, optimizer, epoch, epoch_step, epoch_step_val, gen, gen_val, Epoch, cuda, fp16, scaler, save_period, save_dir, local_rank=0):
@@ -58,6 +58,7 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, eval_callbac
                                 'lr'    : get_lr(optimizer)})
             pbar.update(1)
 
+
     if local_rank == 0:
         pbar.close()
         print('Finish Train')
@@ -95,12 +96,19 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, eval_callbac
         if local_rank == 0:
             pbar.set_postfix(**{'val_loss': val_loss / (iteration + 1)})
             pbar.update(1)
-            
+
+    wandb_log_write = {"Train Loss": loss / (iteration + 1),"Val Loss": val_loss / (iteration + 1),"Learning Rate": get_lr(optimizer)}
+
+
     if local_rank == 0:
         pbar.close()
         print('Finish Validation')
         loss_history.append_loss(epoch + 1, loss / epoch_step, val_loss / epoch_step_val)
-        eval_callback.on_epoch_end(epoch + 1, model_train_eval)
+        map_return = eval_callback.on_epoch_end(epoch + 1, model_train_eval)
+
+        wandb_log_write.update(map_return)
+        wandb.log(wandb_log_write)
+
         print('Epoch:'+ str(epoch + 1) + '/' + str(Epoch))
         print('Total Loss: %.3f || Val Loss: %.3f ' % (loss / epoch_step, val_loss / epoch_step_val))
         

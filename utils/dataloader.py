@@ -466,7 +466,16 @@ def yolo_dataset_collate_val(batch):
         box[:, 0] = 0 if bboxes[tag]==[] else len(bboxes[tag])
         bboxes[tag].append(box)
 
-    images  = [torch.from_numpy(i).type(torch.FloatTensor) for i in images]
+    # images  = [torch.from_numpy(i).type(torch.FloatTensor) for i in images]
+
+    images_ = []
+    for i in images:
+        if len(i) > 0:
+            images_.append(torch.from_numpy(np.array(i)).type(torch.FloatTensor))
+        else:
+            images_.append(torch.from_numpy(np.array([])))
+
+
     # bboxes  = [torch.from_numpy(np.concatenate(i, 0)).type(torch.FloatTensor) for i in bboxes]
     bboxes_ = []
     for i in bboxes:
@@ -475,7 +484,7 @@ def yolo_dataset_collate_val(batch):
         else:
             bboxes_.append(torch.from_numpy(np.array([])))
 
-    return zip(images, bboxes_)
+    return zip(images_, bboxes_)
 
 
 
