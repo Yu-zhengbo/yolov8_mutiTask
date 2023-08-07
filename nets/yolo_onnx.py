@@ -305,11 +305,14 @@ class YoloBody(nn.Module):
                     (dbox_3, cls_3, x_3, self.anchors_3.to(dbox_3.device), self.strides_3.to(dbox_3.device)),
                     (dbox_4, cls_4, x_4, self.anchors_4.to(dbox_4.device), self.strides_4.to(dbox_4.device))]
         elif self.task_number == 5:
-            return [(dbox_1, cls_1, x_1, self.anchors_1.to(dbox_1.device), self.strides_1.to(dbox_1.device)),
+            forward_output = [(dbox_1, cls_1, x_1, self.anchors_1.to(dbox_1.device), self.strides_1.to(dbox_1.device)),
                     (dbox_2, cls_2, x_2, self.anchors_2.to(dbox_2.device), self.strides_2.to(dbox_2.device)),
                     (dbox_3, cls_3, x_3, self.anchors_3.to(dbox_3.device), self.strides_3.to(dbox_3.device)),
                     (dbox_4, cls_4, x_4, self.anchors_4.to(dbox_4.device), self.strides_4.to(dbox_4.device)),
                     (dbox_5, cls_5, x_5, self.anchors_5.to(dbox_5.device), self.strides_5.to(dbox_5.device))]
+
+            output = [self.decode_box(i) for i in forward_output]
+            return output
 
 
 if __name__ == '__main__':

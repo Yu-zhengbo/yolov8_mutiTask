@@ -217,7 +217,7 @@ class EvalCallback():
                 except:
                     temp_map = get_map(self.MINOVERLAP, False, path=os.path.join(self.map_out_path,str(i)))
 
-                map_return[self.task_name[i]] = temp_map
+                map_return['Val_map/'+self.task_name[i]] = temp_map
 
                 self.maps[i].append(temp_map)
                 self.epoches[i].append(epoch)

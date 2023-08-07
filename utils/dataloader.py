@@ -408,7 +408,7 @@ class YoloDataset(Dataset):
 # DataLoader中collate_fn使用
 def yolo_dataset_collate(batch):
 
-    task = 2
+    task = 5
 
     length = len(batch)//task
     last_length = len(batch) - length*task
@@ -458,7 +458,7 @@ def yolo_dataset_collate(batch):
 
 def yolo_dataset_collate_val(batch):
     # task = max(batch, key=lambda x:x[2])[2] + 1
-    task = 2
+    task = 5
     images  = [[] for _ in range(task)]
     bboxes  = [[] for _ in range(task)]
     for i, (img, box,tag) in enumerate(batch):

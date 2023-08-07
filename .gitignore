@@ -141,3 +141,14 @@ dmypy.json
 
 .idea/*
 
+
+*.jpg
+*.png
+/wandb
+/split
+/model_data/*.txt
+/model_data/yolov8_x.pth
+/model_data/models.onnx
+/model_data/models_withdecode_box.onnx
+/map_out
+/logs

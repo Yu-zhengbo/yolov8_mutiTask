@@ -25,11 +25,14 @@ if __name__ == "__main__":
     #   map_mode为4代表利用COCO工具箱计算当前数据集的0.50:0.95map。需要获得预测结果、获得真实框后并安装pycocotools才行
     #-------------------------------------------------------------------------------------------------------------------#
     map_mode        = 0
+    Task = 5
+    Task_name = ['roadsign_voc', 'sagittaria_v1_voc', 'barricade', 'snacks', 'VOC_random']
     #--------------------------------------------------------------------------------------#
     #   此处的classes_path用于指定需要测量VOC_map的类别
     #   一般情况下与训练和预测所用的classes_path一致即可
     #--------------------------------------------------------------------------------------#
-    classes_path    = 'model_data/voc_classes.txt'
+    # classes_path    = 'model_data/voc_classes.txt'
+    classes_path = ['model_data/{0}_classes.txt'.format(chr(ord('a') + i)) for i in range(Task)]
     #--------------------------------------------------------------------------------------#
     #   MINOVERLAP用于指定想要获得的mAP0.x，mAP0.x的意义是什么请同学们百度一下。
     #   比如计算mAP0.75，可以设定MINOVERLAP = 0.75。
@@ -74,65 +77,81 @@ if __name__ == "__main__":
     #-------------------------------------------------------#
     map_out_path    = 'map_out'
 
-    image_ids = open(os.path.join(VOCdevkit_path, "VOC2007/ImageSets/Main/test.txt")).read().strip().split()
-
     if not os.path.exists(map_out_path):
         os.makedirs(map_out_path)
-    if not os.path.exists(os.path.join(map_out_path, 'ground-truth')):
-        os.makedirs(os.path.join(map_out_path, 'ground-truth'))
-    if not os.path.exists(os.path.join(map_out_path, 'detection-results')):
-        os.makedirs(os.path.join(map_out_path, 'detection-results'))
-    if not os.path.exists(os.path.join(map_out_path, 'images-optional')):
-        os.makedirs(os.path.join(map_out_path, 'images-optional'))
+    # image_ids = open(os.path.join(VOCdevkit_path, "VOC2007/ImageSets/Main/test.txt")).read().strip().split()
 
-    class_names, _ = get_classes(classes_path)
+    test_file_list = ['split/{0}_2007_test.txt'.format(chr(ord('a') + i)) for i in range(Task)]
+    image_ids = []
+    for _ in test_file_list:
+        with open(_,'r',encoding='utf-8')as f:
+            image_ids.append([i.split(' ')[0] for i in f.readlines() if len(i)>1])
+    # image_ids = [i.split(' ')[0] for i in image_ids if len(i)>1]
 
-    if map_mode == 0 or map_mode == 1:
-        print("Load model.")
-        yolo = YOLO(confidence = confidence, nms_iou = nms_iou)
-        print("Load model done.")
+    class_namess, _ = get_classes(classes_path)
 
-        print("Get predict result.")
-        for image_id in tqdm(image_ids):
-            image_path  = os.path.join(VOCdevkit_path, "VOC2007/JPEGImages/"+image_id+".jpg")
-            image       = Image.open(image_path)
-            if map_vis:
-                image.save(os.path.join(map_out_path, "images-optional/" + image_id + ".jpg"))
-            yolo.get_map_txt(image_id, image, class_names, map_out_path)
-        print("Get predict result done.")
+
+    for task_index,name_task in enumerate(Task_name):
+        map_out_path_ = os.path.join(map_out_path,name_task)
+        if not os.path.exists(os.path.join(map_out_path_, 'ground-truth')):
+            os.makedirs(os.path.join(map_out_path_, 'ground-truth'))
+        if not os.path.exists(os.path.join(map_out_path_, 'detection-results')):
+            os.makedirs(os.path.join(map_out_path_, 'detection-results'))
+        if not os.path.exists(os.path.join(map_out_path_, 'images-optional')):
+            os.makedirs(os.path.join(map_out_path_, 'images-optional'))
+
+
+
+        if map_mode == 0 or map_mode == 1:
+            print("Load model.")
+            yolo = YOLO(confidence = confidence, nms_iou = nms_iou)
+            print("Load model done.")
+
+            print("Get predict result.")
+            for image_id in tqdm(image_ids[task_index]):
+                image       = Image.open(image_id)
+
+                image_id = image_id.split('/')[-1].split('.')[0]
+
+                if map_vis:
+                    image.save(os.path.join(map_out_path_, "images-optional/" + image_id + ".jpg"))
+                yolo.get_map_txt(image_id, image, class_namess[task_index], map_out_path_,task_index)
+            print("Get predict result done.")
         
-    if map_mode == 0 or map_mode == 2:
-        print("Get ground truth result.")
-        for image_id in tqdm(image_ids):
-            with open(os.path.join(map_out_path, "ground-truth/"+image_id+".txt"), "w") as new_f:
-                root = ET.parse(os.path.join(VOCdevkit_path, "VOC2007/Annotations/"+image_id+".xml")).getroot()
-                for obj in root.findall('object'):
-                    difficult_flag = False
-                    if obj.find('difficult')!=None:
-                        difficult = obj.find('difficult').text
-                        if int(difficult)==1:
-                            difficult_flag = True
-                    obj_name = obj.find('name').text
-                    if obj_name not in class_names:
-                        continue
-                    bndbox  = obj.find('bndbox')
-                    left    = bndbox.find('xmin').text
-                    top     = bndbox.find('ymin').text
-                    right   = bndbox.find('xmax').text
-                    bottom  = bndbox.find('ymax').text
+        if map_mode == 0 or map_mode == 2:
+            print("Get ground truth result.")
+            for image_id in tqdm(image_ids[task_index]):
+                image_id_txt = image_id.split('/')[-1].split('.')[0]
+                with open(os.path.join(map_out_path_, "ground-truth/"+image_id_txt+".txt"), "w") as new_f:
+                    # root = ET.parse(image_id.replace("jpg","xml").replace('png','xml').replace('JPEGImages','Annotations')).getroot()
+                    root = ET.parse(image_id.replace('JPEGImages','Annotations')[:-3]+'xml').getroot()
+                    for obj in root.findall('object'):
+                        difficult_flag = False
+                        if obj.find('difficult')!=None:
+                            difficult = obj.find('difficult').text
+                            if int(difficult)==1:
+                                difficult_flag = True
+                        obj_name = obj.find('name').text
+                        if obj_name not in class_namess[task_index]:
+                            continue
+                        bndbox  = obj.find('bndbox')
+                        left    = bndbox.find('xmin').text
+                        top     = bndbox.find('ymin').text
+                        right   = bndbox.find('xmax').text
+                        bottom  = bndbox.find('ymax').text
 
-                    if difficult_flag:
-                        new_f.write("%s %s %s %s %s difficult\n" % (obj_name, left, top, right, bottom))
-                    else:
-                        new_f.write("%s %s %s %s %s\n" % (obj_name, left, top, right, bottom))
-        print("Get ground truth result done.")
+                        if difficult_flag:
+                            new_f.write("%s %s %s %s %s difficult\n" % (obj_name, left, top, right, bottom))
+                        else:
+                            new_f.write("%s %s %s %s %s\n" % (obj_name, left, top, right, bottom))
+            print("Get ground truth result done.")
 
-    if map_mode == 0 or map_mode == 3:
-        print("Get map.")
-        get_map(MINOVERLAP, True, score_threhold = score_threhold, path = map_out_path)
-        print("Get map done.")
+        if map_mode == 0 or map_mode == 3:
+            print("Get map.")
+            get_map(MINOVERLAP, True, score_threhold = score_threhold, path = map_out_path_)
+            print("Get map done.")
 
-    if map_mode == 4:
-        print("Get map.")
-        get_coco_map(class_names = class_names, path = map_out_path)
-        print("Get map done.")
+        if map_mode == 4:
+            print("Get map.")
+            get_coco_map(class_names = class_namess[task_index], path = map_out_path_)
+            print("Get map done.")

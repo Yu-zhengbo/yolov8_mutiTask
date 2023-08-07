@@ -43,7 +43,9 @@ if __name__ == "__main__":
     wandb.init(project="yolo8_mutitask")
 
 
-    Task = 2  #决定了检测头的数量
+    Task = 5  #决定了检测头的数量
+
+    Task_name = ['roadsign_voc','sagittaria_v1_voc','barricade','snacks','VOC_random']
 
     #---------------------------------#
     #   Cuda    是否使用Cuda
@@ -99,11 +101,11 @@ if __name__ == "__main__":
     #      可以设置mosaic=True，直接随机初始化参数开始训练，但得到的效果仍然不如有预训练的情况。（像COCO这样的大数据集可以这样做）
     #   2、了解imagenet数据集，首先训练分类模型，获得网络的主干部分权值，分类模型的 主干部分 和该模型通用，基于此进行训练。
     #----------------------------------------------------------------------------------------------------------------------------#
-    # model_path      = 'model_data/yolov8_s.pth'
+    model_path      = 'model_data/yolov8_s.pth'
     # model_path  = 'logs/best_epoch_weights_fir.pth'
     # model_path_2 = 'logs/best_epoch_weights_sec.pth'
     # model_path      = 'logs/best_epoch_weights_epoch_20.pth'
-    model_path = 'logs/ep050-loss5.882-val_loss6.248.pth'
+    # model_path = 'logs/ep050-loss5.882-val_loss6.248.pth'
     #------------------------------------------------------#
     #   input_shape     输入的shape大小，一定要是32的倍数
     #------------------------------------------------------#
@@ -182,8 +184,8 @@ if __name__ == "__main__":
     #                       (当Freeze_Train=False时失效)
     #------------------------------------------------------------------#
     Init_Epoch          = 0
-    Freeze_Epoch        = 20
-    Freeze_batch_size   = 16
+    Freeze_Epoch        = 10
+    Freeze_batch_size   = 12
     #------------------------------------------------------------------#
     #   解冻阶段训练参数
     #   此时模型的主干不被冻结了，特征提取网络会发生改变
@@ -193,8 +195,8 @@ if __name__ == "__main__":
     #                           Adam可以使用相对较小的UnFreeze_Epoch
     #   Unfreeze_batch_size     模型在解冻后的batch_size
     #------------------------------------------------------------------#
-    UnFreeze_Epoch      = 50
-    Unfreeze_batch_size = 8
+    UnFreeze_Epoch      = 20
+    Unfreeze_batch_size = 5
     #------------------------------------------------------------------#
     #   Freeze_Train    是否进行冻结训练
     #                   默认先冻结主干训练后解冻训练。
@@ -209,7 +211,7 @@ if __name__ == "__main__":
     #   Min_lr          模型的最小学习率，默认为最大学习率的0.01
     #------------------------------------------------------------------#
     Init_lr             = 1e-1
-    Min_lr              = Init_lr * 0.01
+    Min_lr              = Init_lr * 0.001
     #------------------------------------------------------------------#
     #   optimizer_type  使用到的优化器种类，可选的有adam、sgd
     #                   当使用Adam优化器时建议设置  Init_lr=1e-3
@@ -228,7 +230,7 @@ if __name__ == "__main__":
     #------------------------------------------------------------------#
     #   save_period     多少个epoch保存一次权值
     #------------------------------------------------------------------#
-    save_period         = 5
+    save_period         = 1
     #------------------------------------------------------------------#
     #   save_dir        权值与日志文件保存的文件夹
     #------------------------------------------------------------------#
@@ -294,7 +296,7 @@ if __name__ == "__main__":
     #------------------------------------------------------#
     #   创建yolo模型
     #------------------------------------------------------#
-    model = YoloBody(input_shape, num_classes, phi, pretrained=pretrained)
+    model = YoloBody(input_shape, num_classes, phi, pretrained=pretrained,task=Task_name)
 
     if model_path != '':
         #------------------------------------------------------#
@@ -312,15 +314,16 @@ if __name__ == "__main__":
         load_key, no_load_key, temp_dict = [], [], {}
 
         for k, v in pretrained_dict.items():
-            ks = []
-            for i in range(Task):
-                k_ = k.split('.')
-                k_[0] = k_[0]+'_%d'%(i+1)
-                ks.append('.'.join(k_))
             if k in model_dict.keys() and np.shape(model_dict[k]) == np.shape(v):
                 temp_dict[k] = v
                 load_key.append(k)
             else:
+                ks = []
+                for i in range(Task):
+                    k_ = k.split('.')
+                    k_[0] = k_[0] + '_%d' % (i + 1)
+                    ks.append('.'.join(k_))
+
                 for i in range(Task):
                     if ks[i] in model_dict.keys() and np.shape(model_dict[ks[i]]) == np.shape(v):
                         temp_dict[ks[i]] = v
@@ -476,6 +479,14 @@ if __name__ == "__main__":
         Init_lr_fit     = min(max(batch_size / nbs * Init_lr, lr_limit_min), lr_limit_max)
         Min_lr_fit      = min(max(batch_size / nbs * Min_lr, lr_limit_min * 1e-2), lr_limit_max * 1e-2)
 
+        # nbs = 64
+        # lr_limit_max = 1e-2 if optimizer_type == 'adam' else 5e-2
+        # lr_limit_min = 3e-5 if optimizer_type == 'adam' else 5e-4
+        # Init_lr_fit = min(max(batch_size / nbs * Init_lr, lr_limit_min), lr_limit_max)
+        # Min_lr_fit = min(max(batch_size / nbs * Min_lr, lr_limit_min * 1e-2), lr_limit_max * 1e-3)
+
+
+
         #---------------------------------------#
         #   根据optimizer_type选择优化器
         #---------------------------------------#
@@ -515,9 +526,9 @@ if __name__ == "__main__":
         #   构建数据集加载器。
         #---------------------------------------#
         train_dataset   = YoloDataset(train_lines, input_shape, num_classes, epoch_length=UnFreeze_Epoch, \
-                                        mosaic=mosaic, mixup=mixup, mosaic_prob=mosaic_prob, mixup_prob=mixup_prob, train=True, special_aug_ratio=special_aug_ratio)
+                                        mosaic=mosaic, mixup=mixup, mosaic_prob=mosaic_prob, mixup_prob=mixup_prob, train=True, special_aug_ratio=special_aug_ratio,task=Task_name)
         val_dataset     = YoloDataset(val_lines, input_shape, num_classes, epoch_length=UnFreeze_Epoch, \
-                                        mosaic=False, mixup=False, mosaic_prob=0, mixup_prob=0, train=False, special_aug_ratio=0)
+                                        mosaic=False, mixup=False, mosaic_prob=0, mixup_prob=0, train=False, special_aug_ratio=0,task=Task_name)
         
         if distributed:
             train_sampler   = torch.utils.data.distributed.DistributedSampler(train_dataset, shuffle=True,)
@@ -532,7 +543,7 @@ if __name__ == "__main__":
         gen             = DataLoader(train_dataset, shuffle = shuffle, batch_size = batch_size, num_workers = num_workers, pin_memory=True,
                                     drop_last=True, collate_fn=yolo_dataset_collate, sampler=train_sampler)
         gen_val         = DataLoader(val_dataset  , shuffle = shuffle, batch_size = batch_size, num_workers = num_workers, pin_memory=True, 
-                                    drop_last=True, collate_fn=yolo_dataset_collate, sampler=val_sampler)
+                                    drop_last=True, collate_fn=yolo_dataset_collate_val, sampler=val_sampler)
 
         #----------------------#
         #   记录eval的map曲线
@@ -585,7 +596,7 @@ if __name__ == "__main__":
                 gen             = DataLoader(train_dataset, shuffle = shuffle, batch_size = batch_size, num_workers = num_workers, pin_memory=True,
                                             drop_last=True, collate_fn=yolo_dataset_collate, sampler=train_sampler)
                 gen_val         = DataLoader(val_dataset  , shuffle = shuffle, batch_size = batch_size, num_workers = num_workers, pin_memory=True, 
-                                            drop_last=True, collate_fn=yolo_dataset_collate, sampler=val_sampler)
+                                            drop_last=True, collate_fn=yolo_dataset_collate_val, sampler=val_sampler)
 
                 UnFreeze_flag   = True
 
@@ -599,7 +610,8 @@ if __name__ == "__main__":
 
             fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, eval_callback, optimizer, epoch, epoch_step, epoch_step_val, gen, gen_val, UnFreeze_Epoch, Cuda, fp16, scaler, save_period, save_dir, local_rank)
 
-            visual_gt_pred(model_train, class_names, num_classes,visual_list)
+            if local_rank == 0:
+                visual_gt_pred(model_train, class_names, num_classes, visual_list)
 
 
             if distributed:

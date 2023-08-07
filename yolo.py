@@ -7,8 +7,8 @@ import torch
 import torch.nn as nn
 from PIL import ImageDraw, ImageFont
 
-# from nets.yolo import YoloBody
-from nets.yolo_onnx import YoloBody
+from nets.yolo import YoloBody
+# from nets.yolo_onnx import YoloBody
 from utils.utils import (cvtColor, get_classes, preprocess_input,
                          resize_image, show_config)
 from utils.utils_bbox import DecodeBox
@@ -26,9 +26,10 @@ class YOLO(object):
         #   验证集损失较低不代表mAP较高，仅代表该权值在验证集上泛化性能较好。
         #   如果出现shape不匹配，同时要注意训练时的model_path和classes_path参数的修改
         #--------------------------------------------------------------------------#
-        "Task"              : 2,
-        "model_path"        : 'logs/best_epoch_weights.pth',
-        "classes_path"      : ['model_data/{0}_classes.txt'.format(chr(ord('a')+i)) for i in range(2)],
+        "Task"              : 5,
+        "Task_name"         : ['roadsign_voc', 'sagittaria_v1_voc', 'barricade', 'snacks', 'VOC_random'],
+        "model_path"        : 'logs/ep010-loss15.997-val_loss15.267.pth',
+        "classes_path"      : ['model_data/{0}_classes.txt'.format(chr(ord('a')+i)) for i in range(5)],
         #---------------------------------------------------------------------#
         #   输入图片的大小，必须为32的倍数。
         #---------------------------------------------------------------------#
@@ -101,7 +102,7 @@ class YOLO(object):
         #---------------------------------------------------#
         #   建立yolo模型，载入yolo模型的权重
         #---------------------------------------------------#
-        self.net    = YoloBody(self.input_shape, self.num_classes, self.phi)
+        self.net    = YoloBody(self.input_shape, self.num_classes, self.phi,task=self.Task_name)
         
         device      = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.net.load_state_dict(torch.load(self.model_path, map_location=device))
@@ -393,7 +394,7 @@ class YOLO(object):
 
         print('Onnx model save as {}'.format(model_path))
 
-    def get_map_txt(self, image_id, image, class_names, map_out_path):
+    def get_map_txt(self, image_id, image, class_names, map_out_path,task_index):
         f = open(os.path.join(map_out_path, "detection-results/"+image_id+".txt"), "w", encoding='utf-8') 
         image_shape = np.array(np.shape(image)[0:2])
         #---------------------------------------------------------#
@@ -418,12 +419,12 @@ class YOLO(object):
             #---------------------------------------------------------#
             #   将图像输入网络当中进行预测！
             #---------------------------------------------------------#
-            outputs = self.net(images)
+            outputs = self.net(images)[task_index]
             outputs = self.bbox_util.decode_box(outputs)
             #---------------------------------------------------------#
             #   将预测框进行堆叠，然后进行非极大抑制
             #---------------------------------------------------------#
-            results = self.bbox_util.non_max_suppression(outputs, self.num_classes, self.input_shape, 
+            results = self.bbox_util.non_max_suppression(outputs, len(class_names), self.input_shape,
                         image_shape, self.letterbox_image, conf_thres = self.confidence, nms_thres = self.nms_iou)
                                                     
             if results[0] is None: 
@@ -434,7 +435,7 @@ class YOLO(object):
             top_boxes   = results[0][:, :4]
 
         for i, c in list(enumerate(top_label)):
-            predicted_class = self.class_names[int(c)]
+            predicted_class = class_names[int(c)]
             box             = top_boxes[i]
             score           = str(top_conf[i])
 

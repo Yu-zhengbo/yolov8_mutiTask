@@ -9,6 +9,14 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, eval_callbac
     loss        = 0
     val_loss    = 0
 
+    task_name = model.task_name
+    task_train_loss = [0 for i in task_name]
+    task_train_num = [0 for i in task_name]
+    task_val_loss = [0 for i in task_name]
+    task_val_num = [0 for i in task_name]
+
+
+
     if local_rank == 0:
         print('Start Train')
         pbar = tqdm(total=epoch_step,desc=f'Epoch {epoch + 1}/{Epoch}',postfix=dict,mininterval=0.3)
@@ -31,12 +39,19 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, eval_callbac
 
             if not fp16:
                 outputs = model_train(images)
-                loss_value += yolo_loss(outputs[tag_temp], bboxes,tag_temp)
+                temp_loss = yolo_loss(outputs[tag_temp], bboxes,tag_temp)
+                loss_value += temp_loss
+                task_train_loss[tag_temp] += temp_loss.item()//len(images)
+                task_train_num[tag_temp] += 1
+
             else:
                 from torch.cuda.amp import autocast
                 with autocast():
                     outputs         = model_train(images)
-                    loss_value += yolo_loss(outputs[tag_temp], bboxes,tag_temp)
+                    temp_loss = yolo_loss(outputs[tag_temp], bboxes,tag_temp)
+                    loss_value += temp_loss
+                    task_train_loss[tag_temp] += temp_loss.item() // len(images)
+                    task_train_num[tag_temp] += 1
 
         if not fp16:
             loss_value.backward()
@@ -90,14 +105,24 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, eval_callbac
                 #   前向传播
                 #----------------------#
                 outputs     = model_train_eval(images)
-                loss_value  += yolo_loss(outputs[tag_temp], bboxes,tag_temp)
+                temp_loss = yolo_loss(outputs[tag_temp], bboxes,tag_temp)
+                loss_value  += temp_loss
 
+                task_val_loss[tag_temp] += temp_loss.item()//len(images)
+                task_val_num[tag_temp] += 1
         val_loss += loss_value.item()
+
         if local_rank == 0:
             pbar.set_postfix(**{'val_loss': val_loss / (iteration + 1)})
             pbar.update(1)
 
-    wandb_log_write = {"Train Loss": loss / (iteration + 1),"Val Loss": val_loss / (iteration + 1),"Learning Rate": get_lr(optimizer)}
+    if local_rank == 0:
+        wandb_log_write = {"All/Train Loss": loss / (iteration + 1),"All/Val Loss": val_loss / (iteration + 1),"Learning Rate": get_lr(optimizer)}
+        for tag_temp in range(len(task_train_loss)):
+            task_name_temp = task_name[tag_temp]
+            wandb_log_write['Train_loss/'+task_name_temp] = task_train_loss[tag_temp]/task_train_num[tag_temp]
+            wandb_log_write['Val_loss/'+task_name_temp] = task_val_loss[tag_temp]/task_val_num[tag_temp]
+
 
 
     if local_rank == 0:

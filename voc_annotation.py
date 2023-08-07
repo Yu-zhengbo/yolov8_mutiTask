@@ -39,7 +39,7 @@ train_percent       = 0.9
 #-------------------------------------------------------#
 VOCdevkit_path  = 'D:/浏览器下载/roadsign_voc'
 
-VOCdevkit_sets  = [('2007', 'train'), ('2007', 'val')]
+VOCdevkit_sets  = [('2007', 'train'), ('2007', 'val'),('2007', 'test')]
 classes, _      = get_classes(classes_path)
 
 #-------------------------------------------------------#

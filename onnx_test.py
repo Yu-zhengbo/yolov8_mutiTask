@@ -2,6 +2,18 @@ import onnxruntime as rt
 import numpy as np
 from PIL import Image,ImageDraw, ImageFont
 import time
+
+def get_classes(classes_path):
+    names = []
+    length = []
+    for class_path in classes_path:
+        with open(class_path, encoding='utf-8') as f:
+            class_names = f.readlines()
+        class_names = [c.strip() for c in class_names]
+        names.append(class_names)
+        length.append(len(class_names))
+    return names, length
+
 def yolo_correct_boxes(box_xy, box_wh, input_shape, image_shape, letterbox_image):
     # -----------------------------------------------------------------#
     #   把y轴放前面是因为方便预测框和图像的宽高进行相乘
@@ -157,7 +169,8 @@ def preprocess_input(image):
 
 if __name__ == '__main__':
     # 加载模型
-    sess = rt.InferenceSession("./model_data/models_withdecode_box.onnx")
+
+    sess = rt.InferenceSession("./model_data/models.onnx")
     image = Image.open('./3.png')
     image_shape = np.array(image).shape[:2]
 
@@ -172,12 +185,14 @@ if __name__ == '__main__':
 
 
     # ===========================================
-    num_classes = [4,2]
+    classes_path = ['model_data/{0}_classes.txt'.format(chr(ord('a') + i)) for i in range(5)]
+    class_names, num_classes = get_classes(classes_path)
+    # num_classes = [4,2]
     input_shape = [640, 640]
     letterbox_image = True
     confidence = 0.5
     nms_iou = 0.3
-    class_names = [['speedlimit','crosswalk','trafficlight','stop'],['sagittaria','sagittaria_flower']]
+    # class_names = [['speedlimit','crosswalk','trafficlight','stop'],['sagittaria','sagittaria_flower']]
     input_name = 'images'
     # ===========================================
 
